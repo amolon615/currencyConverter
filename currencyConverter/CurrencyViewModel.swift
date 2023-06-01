@@ -8,7 +8,6 @@
 import SwiftUI
 
 
-
  class CurrenciesOperation : ObservableObject{
      var currency: Currency? = nil
     
@@ -21,7 +20,6 @@ import SwiftUI
     @Published var buffer: String = ""
     
     
-    //push error fetching to View
     @Published var errorLoading: Bool = false
     
     func reverse(){
@@ -30,19 +28,13 @@ import SwiftUI
         self.output = buffer
     }
     
-    
-    init(){
-        loadFromFileRate()
-        if !currencyRates.isEmpty{
-        } else {
-            Task {
-                await fetchRate()
-            }
-        }
+     init(){
+         Task {
+             await fetchRate()
+         }
+     }
 
-    }
-
-     func fetchRate() async {
+    func fetchRate() async {
          guard let url = URL(string: "https://api.exchangerate.host/latest?base=\(input)") else { return }
          
          do {
@@ -53,53 +45,20 @@ import SwiftUI
                  self.errorLoading = true
                  return
              }
-             
              self.currency = try JSONDecoder().decode(Currency.self, from: data)
-             
-             guard currency != nil else { return }
-             saveToFileRate()
-             loadFromFileRate()
+             if let currency {
+                 DispatchQueue.main.async {
+                     self.currencyRates = Array(currency.rates.values)
+                 }
+             }
          } catch {
              print("Error: \(error)")
+             DispatchQueue.main.async {
+                 self.errorLoading = true
+             }
          }
      }
 
-
-    func saveToFileRate() {
-          do {
-              let furl = try FileManager.default
-                  .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                  .appendingPathComponent("currencyRate\(input)")
-                  .appendingPathExtension("json")
-              let data = try JSONEncoder().encode(currency)
-              try data.write(to: furl)
-              print("saved to file rate for \(input)")
-          } catch {
-              print("---> error saveToFile: \(error)")
-          }
-      }
-
-    func loadFromFileRate() {
-          do {
-              let furl = try FileManager.default
-                  .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                  .appendingPathComponent("currencyRate\(input)")
-                  .appendingPathExtension("json")
-              let data = try Data(contentsOf: furl)
-              let currency = try JSONDecoder().decode(Currency.self, from: data)
-              DispatchQueue.main.async {
-                  self.currencyRates = Array(currency.rates.values)
-                  self.currency = currency
-              }
-              print("loaded from file rate for \(input)")
-          } catch {
-              print("error: \(error)")
-          }
-      }
-    
-    
-
-    
     func calculate(){
         guard let amount = Double(amount) else { return }
         self.result = String(amount * (currency?.rates[output] ?? 0))
